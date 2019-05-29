@@ -2,6 +2,7 @@
 
 # Import libraries
 import pandas as pd
+import math as m
 from os import listdir
 
 # Directory containing project files
@@ -20,13 +21,13 @@ file_names = listdir(DIR + '/' + FOLDER_CSV)
 drop_cols = ['month', 'year', 'app_bundle', 'creative_size']
 
 # Initialize the dataframe with the first file, consisting of just column names
-df = pd.read_csv(DIR + '/' + FOLDER_CSV + '/' + file_names[0])
+df = pd.read_csv(DIR + '/' + FOLDER_CSV + '/2019-04-00.csv')
 
 # Drop unnecessary columns
-df = df.drop(drop_cols, 1)
+df = df.drop(drop_cols, axis=1)
 
-# Drop the first file name (headers only) from daily_data
-del file_names[0]
+# Drop the first file name (headers only) from file_names
+file_names.remove('2019-04-00.csv')
 
 # Read the remaining data and append to df
 # This takes about 5 minutes
@@ -34,20 +35,27 @@ for i in file_names:
     # Read daily csv
     temp = pd.read_csv(DIR + '/' + FOLDER_CSV + '/' + i)
     
+    # Optional: sample 1/100 of daily data
+    # Useful for testing
+    # temp = temp.sample(m.floor(temp.shape[0]/100), random_state = 0)
+    
     # Drop unnecessary columns
-    temp = temp.drop(drop_cols, 1)
+    temp = temp.drop(drop_cols, axis=1)
     
     # Split daily csv into two dataframes: click and no click
     # Note: observations for which clicks = 0 & installs = 1 should actually
     # read clicks = 1 & installs = 1
-    click = temp[(temp.clicks == 1) | (temp.installs == 1)]
-    click['clicks'] = 1.0
-    no_click = temp[temp.clicks == 0]
+    click = temp.loc[(temp.clicks == 1) | (temp.installs == 1)]
+    click.loc[:, 'clicks'] = 1.0
+    no_click = temp[(temp.clicks == 0) & (temp.installs == 0)]
     
     # Downsample no click to be the same size as click
     # For reproducibility, set random_state to 0
-    no_click_sample = no_click.sample(n = click.shape[0], random_state = 0)
-    df = pd.concat([df, click, no_click_sample])
+    df = pd.concat([
+            df, 
+            click,
+            no_click.sample(n = click.shape[0], random_state = 0)
+            ], axis=0)
     
     # Visually track progress by printing the file name
     print(i)
