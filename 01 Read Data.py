@@ -18,7 +18,8 @@ file_names = listdir(DIR + '/' + FOLDER_CSV)
 # month, year, and app_bundle have the same value for all observations
 # creative_size encodes the same information as creative_type, so drop 
 # creative_size
-drop_cols = ['month', 'year', 'app_bundle', 'creative_size']
+# day_of_week will be overridden after conversion to local datetime
+drop_cols = ['month', 'year', 'app_bundle', 'creative_size', 'day_of_week']
 
 # Initialize the dataframe with the first file, consisting of just column names
 df = pd.read_csv(DIR + '/' + FOLDER_CSV + '/2019-04-00.csv')
@@ -35,9 +36,8 @@ for i in file_names:
     # Read daily csv
     temp = pd.read_csv(DIR + '/' + FOLDER_CSV + '/' + i)
     
-    # Optional: sample 1/100 of daily data
-    # Useful for testing
-    # temp = temp.sample(m.floor(temp.shape[0]/100), random_state = 0)
+    # For computational simplicity, downsample to 1/20 of daily data
+    temp = temp.sample(m.floor(temp.shape[0]/20), random_state = 0)
     
     # Drop unnecessary columns
     temp = temp.drop(drop_cols, axis=1)
