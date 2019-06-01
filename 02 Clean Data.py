@@ -10,7 +10,7 @@ import numpy as np
 from dateutil import parser
 
 # Directory containing project files
-DIR = r'C:/Users/Annie/Documents/Python Bootcamp Final Project'
+DIR = r'.'
 
 # Read zipcode file and delete 3 or 4 digit zipcodes
 ZIP = pd.read_csv(DIR + '/zipcode/zipcode.csv')
@@ -20,7 +20,7 @@ zipdf = zipdf[zipdf.zip > 9999]
 # Load data
 df = pd.read_pickle(DIR + '/raw_df.pickle')
 
-df = df[df.category != '-1']
+df = df[df.category != '-1'] # Removing Bad Data
 
 df.reset_index(inplace=True)
 
@@ -135,6 +135,8 @@ df = df.drop(['geo_zip', 'bid_timestamp_utc', 'segments', 'category',
 df_train = df[df.day <= 21]
 df_test = df[df.day >= 22]
 
+########################################
+
 # platform_device_model has thousands of values. use the 20 most frequent and
 # group others into an 'Other' category
 top_devices = df_train[
@@ -211,6 +213,45 @@ df_test['platform_bandwidth'] = np.where(
         ~df_test['platform_bandwidth'].isin(bottom_band),
         df_test['platform_bandwidth'],
         'Other')
+
+########################################
+
+def find_means(df, column):
+    possible_values = df[column].unique()
+    
+    means_list = []
+    for value in possible_values:
+        temp = df.loc[df[column] == value]
+        means_list.append([column, value, temp.loc[:,'clicks'].mean(), temp.loc[:,'installs'].mean(), len(temp.index)])
+    
+    return means_list
+
+categories = [
+ 'zip',
+ 'platform_bandwidth',
+ 'platform_carrier',
+ 'platform_os',
+ 'platform_device_make',
+ 'platform_device_model',
+ 'platform_device_screen_size',
+ 'rewarded',
+ 'bid_floor',
+ 'hour',
+ 'day',
+ 'creative_type']
+
+temp = []
+
+for category in categories:
+    print(category)
+    temp += find_means(df_train, category)
+
+means = pd.DataFrame(temp)
+means.columns = ['category', 'value', 'click_mean', 'install_mean', 'count']
+
+means.to_pickle('means.pickle')
+
+########################################
 
 # Dummy-encode categorical columns
 df_train = pd.get_dummies(
