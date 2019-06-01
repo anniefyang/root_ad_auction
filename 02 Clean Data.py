@@ -10,7 +10,7 @@ import numpy as np
 from dateutil import parser
 
 # Directory containing project files
-DIR = r'C:/Users/Annie/Documents/Python Bootcamp Final Project'
+DIR = r'.'
 
 # Read zipcode file and delete 3 or 4 digit zipcodes
 ZIP = pd.read_csv(DIR + '/zipcode/zipcode.csv')
@@ -20,7 +20,7 @@ zipdf = zipdf[zipdf.zip > 9999]
 # Load data
 df = pd.read_pickle(DIR + '/raw_df.pickle')
 
-df = df[df.category != '-1']
+df = df[df.category != '-1'] # Removing Bad Data
 
 df.reset_index(inplace=True)
 
