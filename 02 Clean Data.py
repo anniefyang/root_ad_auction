@@ -7,6 +7,7 @@
 # Import libraries
 import pandas as pd
 import numpy as np
+from dateutil import parser
 
 # Directory containing project files
 DIR = r'C:/Users/Annie/Documents/Python Bootcamp Final Project'
@@ -19,6 +20,8 @@ zipdf = zipdf[zipdf.zip > 9999]
 # Load data
 df = pd.read_pickle(DIR + '/raw_df.pickle')
 
+df = df[df.category != '-1']
+
 df.reset_index(inplace=True)
 
 df = pd.merge(
@@ -29,20 +32,32 @@ df = pd.merge(
         how='left'
         )
 
-# Initialize column 'local_hour' as int with the same value as 'hour'
+# If no corresponding zip is found, set it to be in central time
+df.loc[df.loc[:,'timezone'].isnull(),'timezone'] = -6
+df.loc[df.loc[:,'dst'].isnull(),'dst'] = 1
+df.loc[df.loc[:,'state'].isnull(),'state'] = 'Unknown'
+
+# Add column 'local_hour'
 hours = df['hour']
 hours_list = hours.tolist()
 hour_num = list(int(x[0:2]) for x in hours_list)
-df['local_hour'] = hour_num
+df['local_hour'] = hour_num + df.timezone + df.dst
 
-df = df.assign(local_hour=df.local_hour+df.timezone+df.dst)
+# Keep day and day_of_week consisent with hour
+day_list = list(df.loc[df.loc[:,'local_hour']<0,'day'])
+day_list = list(int(x)-1 for x in day_list)
+df.loc[df.loc[:,'local_hour']<0,'day'] = day_list
+# Update day
+day_string = []
+for x in df.loc[:,'day']:
+   if x!=0:
+       day_string.append('April'+ str(x) +',2019')
+   else:
+       day_string.append('March 31,2019')
+dow = list(parser.parse(str).strftime("%A") for str in day_string)
+df.loc[:,'day_of_week'] = dow
+df.loc[df.loc[:,'local_hour']<0,'local_hour'] +=24
 
-df['day'] = np.where(df['local_hour'] < 0, df['day'] - 1, df['day'])
-df['local_hour'] = np.where(df['local_hour'] < 0, df['local_hour'] + 24, df['local_hour'])
-
-df = df.assign(diff_hour=df.timezone+df.dst)
-
-# TODO: append day of week
 
 # Identify columns with NA or NaN
 df.columns[df.isna().any()]
@@ -108,3 +123,106 @@ df = pd.merge(
 
 # Save dataset as pickle
 df.to_pickle(DIR + '/clean_df.pickle')
+
+# Load data
+df = pd.read_pickle(DIR + '/clean_df.pickle')
+
+# Create modeling dataset
+# Drop columns that will not be used in the model
+df = df.drop(['geo_zip', 'bid_timestamp_utc', 'segments', 'category', 
+              'index', 'Unnamed: 0', 'timezone', 'inventory_source'], axis=1)
+
+df_train = df[df.day <= 21]
+df_test = df[df.day >= 22]
+
+# platform_device_model has thousands of values. use the 20 most frequent and
+# group others into an 'Other' category
+top_devices = df_train[
+        'platform_device_model'].value_counts().head(20).index.values.tolist()
+
+# group uncommon platform_device_model into one category
+df_train['platform_device_model'] = np.where(
+        df_train['platform_device_model'].isin(top_devices),
+        df_train['platform_device_model'],
+        'Other')
+
+df_test['platform_device_model'] = np.where(
+        df_test['platform_device_model'].isin(top_devices),
+        df_test['platform_device_model'],
+        'Other')
+
+# platform_device_make has dozens of values, some very rare. use the 10 most 
+# frequent and group others into an 'Other' category
+top_makes = df_train[
+        'platform_device_make'].value_counts().head(10).index.values.tolist()
+
+# group uncommon platform_device_model into one category
+df_train['platform_device_make'] = np.where(
+        df_train['platform_device_make'].isin(top_makes),
+        df_train['platform_device_make'],
+        'Other')
+
+df_test['platform_device_make'] = np.where(
+        df_test['platform_device_make'].isin(top_makes),
+        df_test['platform_device_make'],
+        'Other')
+
+# Some states are rare- group them into an 'Other' category
+bottom_states = df[
+        'state'].value_counts().tail(6).index.values.tolist()
+
+# group uncommon platform_device_model into one category
+df_train['state'] = np.where(
+        ~df_train['state'].isin(bottom_states),
+        df_train['state'],
+        'Other')
+
+df_test['state'] = np.where(
+        ~df_test['state'].isin(bottom_states),
+        df_test['state'],
+        'Other')
+
+# Some platform_device_screen_size are rare- group them into an 'Other' category
+bottom_ss = df[
+        'platform_device_screen_size'].value_counts().tail(3).index.values.tolist()
+
+# group uncommon platform_device_model into one category
+df_train['platform_device_screen_size'] = np.where(
+        ~df_train['platform_device_screen_size'].isin(bottom_ss),
+        df_train['platform_device_screen_size'],
+        'Other')
+
+df_test['platform_device_screen_size'] = np.where(
+        ~df_test['platform_device_screen_size'].isin(bottom_ss),
+        df_test['platform_device_screen_size'],
+        'Other')
+
+# Some platform_bandwidth are rare- group them into an 'Other' category
+bottom_band = df[
+        'platform_bandwidth'].value_counts().tail(4).index.values.tolist()
+
+# group uncommon platform_device_model into one category
+df_train['platform_bandwidth'] = np.where(
+        ~df_train['platform_bandwidth'].isin(bottom_band),
+        df_train['platform_bandwidth'],
+        'Other')
+
+df_test['platform_bandwidth'] = np.where(
+        ~df_test['platform_bandwidth'].isin(bottom_band),
+        df_test['platform_bandwidth'],
+        'Other')
+
+# Dummy-encode categorical columns
+df_train = pd.get_dummies(
+        df_train, 
+        columns=set(df.select_dtypes(include=['object']).columns) - 
+        set(['auction_id', 'zip', 'bid_floor']))
+
+df_test = pd.get_dummies(
+        df_test, 
+        columns=set(df.select_dtypes(include=['object']).columns) - 
+        set(['auction_id', 'zip', 'bid_floor']))
+
+# Save test and train dataset as pickle
+df_train.to_pickle(DIR + '/df_train.pickle')
+df_test.to_pickle(DIR + '/df_test.pickle')
